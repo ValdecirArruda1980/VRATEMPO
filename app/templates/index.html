@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRATEMPO - Centro Global de Monitoramento Meteorológico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+    <div class="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+        
+        <!-- Header & Search -->
+        <header class="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+            <h1 class="text-2xl font-bold text-sky-400 flex items-center gap-2">🌪️ VRATEMPO GLOBAL</h1>
+            <div class="relative w-full md:w-96">
+                <input type="text" id="cityInput" placeholder="Buscar qualquer cidade no mundo..." 
+                       class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 focus:outline-none focus:border-sky-400">
+                <div id="searchResults" class="absolute left-0 right-0 top-12 bg-slate-800 border border-slate-700 rounded-lg hidden z-50"></div>
+            </div>
+            <button onclick="getUserLocation()" class="bg-sky-600 hover:bg-sky-500 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                📍 Minha Localização
+            </button>
+        </header>
+
+        <!-- Banner de Severidade Extrema -->
+        <div id="alertBanner" class="hidden p-4 rounded-xl border font-semibold flex items-center justify-between shadow-lg">
+            <span id="alertText">--</span>
+            <div class="flex gap-2">
+                <span id="capeValue" class="text-xs px-2 py-1 bg-black/40 rounded">CAPE: -- J/kg</span>
+                <span id="gustValue" class="text-xs px-2 py-1 bg-black/40 rounded">Rajada: -- km/h</span>
+            </div>
+        </div>
+
+        <!-- Metric Cards com Classificação de Cores -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center shadow">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Temperatura</span>
+                <div id="tempCurrent" class="text-3xl font-bold mt-2 text-white">--°C</div>
+                <div id="cityName" class="text-xs text-sky-400 mt-1">Carregando...</div>
+            </div>
+            <div id="windCard" class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center shadow">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Vento / Rajadas</span>
+                <div id="windGusts" class="text-3xl font-bold mt-2 text-emerald-400">-- km/h</div>
+                <div id="windStatus" class="text-[10px] font-bold uppercase mt-1 text-emerald-400">Fraco</div>
+            </div>
+            <div id="rainCard" class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center shadow">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Chuva / Acumulado</span>
+                <div id="rainVolume" class="text-3xl font-bold mt-2 text-sky-400">0.0 mm</div>
+                <div id="rainStatus" class="text-[10px] font-bold uppercase mt-1 text-sky-400">Sem Chuva</div>
+            </div>
+            <div id="capeCard" class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center shadow">
+                <span class="text-xs text-slate-400 uppercase font-semibold">CAPE (Instabilidade)</span>
+                <div id="capeCurrent" class="text-3xl font-bold mt-2 text-purple-400">-- J/kg</div>
+                <div id="capeStatus" class="text-[10px] font-bold uppercase mt-1 text-purple-400">Estável</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center shadow">
+                <span class="text-xs text-slate-400 uppercase font-semibold">Pressão Atmosférica</span>
+                <div id="pressureCurrent" class="text-3xl font-bold mt-2 text-sky-300">-- hPa</div>
+                <div id="liftedIndex" class="text-xs text-amber-400 mt-1">Lifted: --</div>
+            </div>
+        </div>
+
+        <!-- Previsão Grafico de Instabilidade -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow">
+            <h2 class="text-md font-semibold text-slate-300 mb-4">Previsão e Instabilidade Curto Prazo (ECMWF + GFS)</h2>
+            <div class="h-64 relative">
+                <canvas id="hourlyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Mapa Interativo -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow flex flex-col space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 class="text-md font-semibold text-slate-300">Monitor Global em Tempo Real</h2>
+                    <p class="text-xs text-slate-400">Alterne entre Nuvens, Precipitação e Mapa Limpo.</p>
+                </div>
+                
+                <div class="flex bg-slate-700 p-1 rounded-lg text-xs font-semibold gap-1">
+                    <button id="btnClouds" onclick="switchLayer('clouds')" class="px-3 py-1.5 rounded-md bg-sky-600 text-white">☁️ Satélite IR (Nuvens)</button>
+                    <button id="btnPrecip" onclick="switchLayer('precip')" class="px-3 py-1.5 rounded-md text-slate-300 hover:text-white">🌧️ Radar Precipitação</button>
+                    <button id="btnBase" onclick="switchLayer('base')" class="px-3 py-1.5 rounded-md text-slate-300 hover:text-white">🗺️ Mapa Base</button>
+                </div>
+            </div>
+
+            <!-- Legenda Fixo de Cores -->
+            <div class="flex flex-wrap items-center gap-3 bg-slate-900/80 p-3 rounded-lg border border-slate-700 text-xs">
+                <span class="font-bold text-slate-300">Classificação de Severidade:</span>
+                <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500"></span> <span>Verde: Fraco / Estável</span></div>
+                <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-amber-400"></span> <span>Amarelo: Moderado / Atenção</span></div>
+                <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-500"></span> <span>Laranja: Forte / Temporal</span></div>
+                <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span> <span class="font-bold text-red-400">Vermelho: Extremo / Granizo / Tornado</span></div>
+            </div>
+
+            <div id="map" class="w-full h-[600px] rounded-lg overflow-hidden border border-slate-700 relative z-10"></div>
+        </div>
+
+    </div>
+
+    <script>
+        let map = null, hourlyChart = null;
+        let cloudsLayer = null, precipLayer = null, activeMarker = null, stormMarker = null;
+        let currentLat = -22.7253, currentLon = -47.6492;
+
+        function initMap() {
+            if (map) return;
+
+            map = L.map('map', { maxZoom: 12, minZoom: 2 }).setView([currentLat, currentLon], 7);
+
+            // Mapa Base OpenStreetMap
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 12,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+
+            // Camada Nuvens / Satélite IR (RainViewer Public Tiles Direct)
+            cloudsLayer = L.tileLayer('https://tilecache.rainviewer.com/v2/satellite/latest/512/{z}/{x}/{y}/0/0_0.png', {
+                opacity: 0.85,
+                maxNativeZoom: 6,
+                maxZoom: 12,
+                tileSize: 512,
+                zoomOffset: -1
+            });
+
+            // Camada Radar / Precipitação (RainViewer Direct Radar)
+            precipLayer = L.tileLayer('https://tilecache.rainviewer.com/v2/radar/nowcast_10/512/{z}/{x}/{y}/2/1_1.png', {
+                opacity: 0.85,
+                maxNativeZoom: 6,
+                maxZoom: 12,
+                tileSize: 512,
+                zoomOffset: -1
+            });
+
+            // Iniciar com Nuvens ativas
+            switchLayer('clouds');
+        }
+
+        function switchLayer(layerType) {
+            const btnClouds = document.getElementById('btnClouds');
+            const btnPrecip = document.getElementById('btnPrecip');
+            const btnBase = document.getElementById('btnBase');
+
+            if (map.hasLayer(cloudsLayer)) map.removeLayer(cloudsLayer);
+            if (map.hasLayer(precipLayer)) map.removeLayer(precipLayer);
+
+            btnClouds.className = "px-3 py-1.5 rounded-md text-slate-300 hover:text-white";
+            btnPrecip.className = "px-3 py-1.5 rounded-md text-slate-300 hover:text-white";
+            btnBase.className = "px-3 py-1.5 rounded-md text-slate-300 hover:text-white";
+
+            if (layerType === 'clouds') {
+                cloudsLayer.addTo(map);
+                btnClouds.className = "px-3 py-1.5 rounded-md bg-sky-600 text-white";
+            } else if (layerType === 'precip') {
+                precipLayer.addTo(map);
+                btnPrecip.className = "px-3 py-1.5 rounded-md bg-sky-600 text-white";
+            } else {
+                btnBase.className = "px-3 py-1.5 rounded-md bg-sky-600 text-white";
+            }
+        }
+
+        async function fetchWeatherData(lat, lon, name = "Piracicaba, SP") {
+            document.getElementById('cityName').innerText = name;
+            try {
+                const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+                const res = await response.json();
+                
+                if (!res.data || !res.data.current) return;
+                const data = res.data.current;
+                
+                document.getElementById('tempCurrent').innerText = `${data.temperature_2m}°C`;
+                document.getElementById('pressureCurrent').innerText = `${data.surface_pressure} hPa`;
+                
+                const cape = data.cape || 0;
+                const lifted = data.lifted_index || 0;
+                const gusts = data.wind_gusts_10m || data.wind_speed_10m || 0;
+                const rain = data.precipitation || 0;
+
+                document.getElementById('capeCurrent').innerText = `${cape} J/kg`;
+                document.getElementById('liftedIndex').innerText = `Lifted: ${lifted}`;
+                document.getElementById('windGusts').innerText = `${gusts} km/h`;
+                document.getElementById('rainVolume').innerText = `${rain} mm`;
+
+                classifyWind(gusts);
+                classifyRain(rain);
+                classifyCape(cape, lifted);
+
+                checkStormSeverity(cape, lifted, gusts, rain, lat, lon, name);
+                
+                if (res.data.hourly) {
+                    updateChart(res.data.hourly);
+                }
+            } catch (err) {
+                console.error("Erro ao buscar dados meteorológicos:", err);
+            }
+
+            if (map) {
+                map.setView([lat, lon], 7);
+                if (activeMarker) map.removeLayer(activeMarker);
+                activeMarker = L.marker([lat, lon]).addTo(map).bindPopup(`<b>${name}</b>`).openPopup();
+            }
+        }
+
+        function classifyWind(gusts) {
+            const status = document.getElementById('windStatus');
+            const val = document.getElementById('windGusts');
+
+            if (gusts >= 75) {
+                val.className = "text-3xl font-bold mt-2 text-red-500 animate-pulse";
+                status.innerText = "🚨 Extremo / Vendaval";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-red-400";
+            } else if (gusts >= 45) {
+                val.className = "text-3xl font-bold mt-2 text-orange-400";
+                status.innerText = "🟠 Vento Forte";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-orange-400";
+            } else if (gusts >= 25) {
+                val.className = "text-3xl font-bold mt-2 text-amber-300";
+                status.innerText = "🟡 Moderado";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-amber-300";
+            } else {
+                val.className = "text-3xl font-bold mt-2 text-emerald-400";
+                status.innerText = "🟢 Fraco / Normal";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-emerald-400";
+            }
+        }
+
+        function classifyRain(rain) {
+            const status = document.getElementById('rainStatus');
+            const val = document.getElementById('rainVolume');
+
+            if (rain >= 30) {
+                val.className = "text-3xl font-bold mt-2 text-red-500 animate-pulse";
+                status.innerText = "🚨 Temporal Torrencial";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-red-400";
+            } else if (rain >= 10) {
+                val.className = "text-3xl font-bold mt-2 text-orange-400";
+                status.innerText = "🟠 Chuva Forte";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-orange-400";
+            } else if (rain > 0) {
+                val.className = "text-3xl font-bold mt-2 text-amber-300";
+                status.innerText = "🟡 Chuva Fraca/Mod.";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-amber-300";
+            } else {
+                val.className = "text-3xl font-bold mt-2 text-sky-400";
+                status.innerText = "🟢 Sem Chuva";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-sky-400";
+            }
+        }
+
+        function classifyCape(cape, lifted) {
+            const status = document.getElementById('capeStatus');
+            const val = document.getElementById('capeCurrent');
+
+            if (cape >= 2000 || lifted <= -6) {
+                val.className = "text-3xl font-bold mt-2 text-red-500 animate-pulse";
+                status.innerText = "🚨 Severo / Risco Tornado";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-red-400";
+            } else if (cape >= 1000 || lifted <= -3) {
+                val.className = "text-3xl font-bold mt-2 text-orange-400";
+                status.innerText = "🟠 Instabilidade Alta";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-orange-400";
+            } else if (cape >= 300) {
+                val.className = "text-3xl font-bold mt-2 text-amber-300";
+                status.innerText = "🟡 Instabilidade Leve";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-amber-300";
+            } else {
+                val.className = "text-3xl font-bold mt-2 text-purple-400";
+                status.innerText = "🟢 Atmosfera Estável";
+                status.className = "text-[10px] font-bold uppercase mt-1 text-purple-400";
+            }
+        }
+
+        function checkStormSeverity(cape, lifted, gusts, rain, lat, lon, name) {
+            const banner = document.getElementById('alertBanner');
+            const alertText = document.getElementById('alertText');
+            const capeValue = document.getElementById('capeValue');
+            const gustValue = document.getElementById('gustValue');
+
+            banner.classList.remove('hidden', 'bg-emerald-900/80', 'border-emerald-500', 'bg-amber-900/80', 'border-amber-500', 'bg-orange-900/80', 'border-orange-500', 'bg-red-900/80', 'border-red-500');
+            capeValue.innerText = `CAPE: ${cape} J/kg`;
+            gustValue.innerText = `Rajada: ${gusts} km/h`;
+
+            if (stormMarker && map) map.removeLayer(stormMarker);
+
+            if (cape >= 2000 || lifted <= -6 || gusts >= 75) {
+                banner.classList.add('bg-red-900/80', 'border-red-500', 'text-red-200');
+                alertText.innerHTML = "🚨 <b>ALERTA CRÍTICO (VERMELHO):</b> Risco de Supercélulas, Granizo Pesado, Vendaval Extremo ou Tornados!";
+                
+                const alertIcon = L.divIcon({
+                    html: '<div class="text-4xl animate-bounce">🌪️</div>',
+                    className: 'custom-alert-icon'
+                });
+                if (map) {
+                    stormMarker = L.marker([lat + 0.01, lon + 0.01], { icon: alertIcon }).addTo(map)
+                        .bindPopup(`🌪️ <b>ALERTA DE SEVERIDADE EXTREMA</b><br>Risco Elevado de Tornado/Granizo em ${name}`).openPopup();
+                }
+
+            } else if (cape >= 1000 || lifted <= -3 || gusts >= 45 || rain >= 15) {
+                banner.classList.add('bg-orange-900/80', 'border-orange-500', 'text-orange-200');
+                alertText.innerHTML = "🟠 <b>ALERTA DE TEMPORAL (LARANJA):</b> Instabilidade alta com risco de temporal, raios e rajadas de vento.";
+            } else if (cape >= 300 || gusts >= 25 || rain > 0) {
+                banner.classList.add('bg-amber-900/80', 'border-amber-500', 'text-amber-200');
+                alertText.innerHTML = "🟡 <b>ATENÇÃO (AMARELO):</b> Possibilidade de pancadas de chuva isoladas na região.";
+            } else {
+                banner.classList.add('bg-emerald-900/80', 'border-emerald-500', 'text-emerald-200');
+                alertText.innerHTML = "🟢 <b>CONDIÇÕES ESTÁVEIS (VERDE):</b> Sem sinais de chuva forte ou tempestades no momento.";
+            }
+        }
+
+        function updateChart(hourly) {
+            if (!hourly || !hourly.time) return;
+            
+            const labels = hourly.time.slice(0, 24).map(t => t.split('T')[1]);
+            const temps = hourly.temperature_2m ? hourly.temperature_2m.slice(0, 24) : [];
+            const capes = hourly.cape ? hourly.cape.slice(0, 24) : [];
+
+            const ctx = document.getElementById('hourlyChart');
+            if (!ctx) return;
+
+            if (hourlyChart) {
+                hourlyChart.destroy();
+            }
+
+            hourlyChart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { 
+                            label: 'Temperatura (°C)', 
+                            data: temps, 
+                            borderColor: '#38bdf8', 
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            yAxisID: 'y', 
+                            tension: 0.3,
+                            fill: true
+                        },
+                        { 
+                            label: 'CAPE / Instabilidade (J/kg)', 
+                            data: capes, 
+                            borderColor: '#c084fc', 
+                            backgroundColor: 'rgba(192, 132, 252, 0.2)', 
+                            yAxisID: 'y1', 
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        y: { 
+                            type: 'linear', 
+                            display: true,
+                            position: 'left', 
+                            grid: { color: '#334155' },
+                            title: { display: true, text: 'Temp (°C)', color: '#38bdf8' }
+                        },
+                        y1: { 
+                            type: 'linear', 
+                            display: true,
+                            position: 'right', 
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'CAPE (J/kg)', color: '#c084fc' }
+                        },
+                        x: { grid: { color: '#334155' } }
+                    }
+                }
+            });
+        }
+
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    fetchWeatherData(pos.coords.latitude, pos.coords.longitude, "Minha Localização");
+                });
+            }
+        }
+
+        document.getElementById('cityInput').addEventListener('input', async (e) => {
+            const val = e.target.value;
+            if (val.length < 3) return;
+            try {
+                const res = await fetch(`/api/search?q=${val}`);
+                const data = await res.json();
+                const resultsDiv = document.getElementById('searchResults');
+                resultsDiv.innerHTML = '';
+                resultsDiv.classList.remove('hidden');
+
+                if (data.results) {
+                    data.results.forEach(city => {
+                        const item = document.createElement('div');
+                        item.className = "p-2 hover:bg-slate-700 cursor-pointer border-b border-slate-700 text-sm";
+                        item.innerText = `${city.name}, ${city.admin1 || ''} (${city.country})`;
+                        item.onclick = () => {
+                            fetchWeatherData(city.latitude, city.longitude, `${city.name}, ${city.admin1 || ''}`);
+                            resultsDiv.classList.add('hidden');
+                            document.getElementById('cityInput').value = '';
+                        };
+                        resultsDiv.appendChild(item);
+                    });
+                }
+            } catch(e) {
+                console.error("Erro na busca de cidade:", e);
+            }
+        });
+
+        window.onload = () => {
+            initMap();
+            fetchWeatherData(currentLat, currentLon);
+        };
+    </script>
+</body>
+</html>
