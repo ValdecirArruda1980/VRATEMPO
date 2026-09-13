@@ -21,15 +21,18 @@ async def get_weather(
         weather_url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}"
-            f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape,lifted_index"
-            f"&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,surface_pressure,wind_gusts_10m,cape,lifted_index"
+            f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape"
+            f"&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,surface_pressure,wind_gusts_10m,cape"
             f"&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max"
             f"&timezone=auto"
         )
         response = await client.get(weather_url)
-        weather_data = response.json() if response.status_code == 200 else {}
-
-    return {"status": "success", "data": weather_data}
+        
+        if response.status_code != 200:
+            print(f"Erro Open-Meteo [{response.status_code}]: {response.text}")
+            return {"status": "error", "code": response.status_code, "detail": response.text}
+            
+        return {"status": "success", "data": response.json()}
 
 @app.get("/api/search")
 async def search_city(q: str = Query(..., min_length=2)):
