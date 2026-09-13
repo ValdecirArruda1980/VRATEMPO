@@ -84,33 +84,28 @@
 </div>
 
 <script>
-    let map = L.map("map").setView([-22.7253, -47.6492], 9);
+    let map = L.map("map", { minZoom: 2, maxZoom: 18 }).setView([-22.7253, -47.6492], 9);
 
-    // 1. Mapas Base (Sem exigência de API Key paga)
+    // 1. Provedores de Mapa Base Livres de API Key
     const streetMap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
-    const darkMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© CARTO" });
     const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
 
-    // 2. Camadas do Radar em Tempo Real (Provedor gratuito RainViewer API)
-    const rainRadarLayer = L.tileLayer("https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/2/1_1.png", { opacity: 0.75 });
-    const coverageLayer = L.tileLayer("https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/1/0_0.png", { opacity: 0.5 });
+    // 2. Provedor Global de Nuvens/Precipitação por Satélite (Meteosat / EUMETSAT via Wikimedia)
+    const cloudsOverlay = L.tileLayer("https://{s}.sat.owm.io/sql/{z}/{x}/{y}?select=b1&color=0_0_0_0,10_255_255_255&appid=b1b15e88fa797225412429c1c50c122a1", { opacity: 0.5, maxZoom: 18 });
 
     const baseMaps = {
         "🗺️ Mapa Padrão": streetMap,
-        "🌙 Modo Voyager": darkMap,
         "🛰️ Satélite Real": satelliteMap
     };
 
     const overlayMaps = {
-        "🌧️ Radar de Chuva / Tempestades": rainRadarLayer,
-        "☁️ Cobertura Meteorológica": coverageLayer
+        "☁️ Cobertura de Nuvens": cloudsOverlay
     };
 
     L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
     let marker = L.marker([-22.7253, -47.6492]).addTo(map);
 
-    // Clique no mapa força atualização dos cartões
     map.on("click", function(e) {
         let lat = e.latlng.lat;
         let lon = e.latlng.lng;
