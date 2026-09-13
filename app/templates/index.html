@@ -86,23 +86,16 @@
 <script>
     let map = L.map("map", { minZoom: 2, maxZoom: 18 }).setView([-22.7253, -47.6492], 9);
 
-    // 1. Provedores de Mapa Base Livres de API Key
+    // Mapas base
     const streetMap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
     const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
-
-    // 2. Provedor Global de Nuvens/Precipitação por Satélite (Meteosat / EUMETSAT via Wikimedia)
-    const cloudsOverlay = L.tileLayer("https://{s}.sat.owm.io/sql/{z}/{x}/{y}?select=b1&color=0_0_0_0,10_255_255_255&appid=b1b15e88fa797225412429c1c50c122a1", { opacity: 0.5, maxZoom: 18 });
 
     const baseMaps = {
         "🗺️ Mapa Padrão": streetMap,
         "🛰️ Satélite Real": satelliteMap
     };
 
-    const overlayMaps = {
-        "☁️ Cobertura de Nuvens": cloudsOverlay
-    };
-
-    L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+    L.control.layers(baseMaps, {}, { collapsed: false }).addTo(map);
 
     let marker = L.marker([-22.7253, -47.6492]).addTo(map);
 
