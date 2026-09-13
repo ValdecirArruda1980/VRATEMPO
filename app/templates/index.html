@@ -17,12 +17,10 @@
         .card .sub { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
         #chart-container { background: #1e293b; margin: 0 20px 20px 20px; padding: 15px; border-radius: 10px; border: 1px solid #334155; height: 200px; }
         
-        /* Container do Mapa */
         .map-wrapper { margin: 0 20px 20px 20px; position: relative; }
         .map-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #1e293b; border-radius: 10px 10px 0 0; border: 1px solid #334155; border-bottom: none; }
         #map { height: 650px !important; border-radius: 0 0 10px 10px; border: 1px solid #334155; }
         
-        /* Legenda de Severidade / Cores */
         .legend-bar { display: flex; gap: 15px; font-size: 0.75rem; color: #cbd5e1; }
         .legend-item { display: flex; align-items: center; gap: 5px; }
         .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -86,43 +84,33 @@
 </div>
 
 <script>
-    // Inicialização do Mapa
     let map = L.map("map").setView([-22.7253, -47.6492], 9);
 
-    // Camadas Base
+    // 1. Mapas Base (Sem exigência de API Key paga)
     const streetMap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
-    const darkMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { attribution: "© CARTO" });
+    const darkMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { attribution: "© CARTO" });
     const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
 
-    // Overlay de Camadas Meteorológicas Coloridas (OpenWeatherMap Tiles Padrão)
-    const apiKey = "b1b15e88fa797225412429c1c50c122a1";
-    const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
-    const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
-    const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
-    const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
-    const pressureLayer = L.tileLayer(`https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+    // 2. Camadas do Radar em Tempo Real (Provedor gratuito RainViewer API)
+    const rainRadarLayer = L.tileLayer("https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/2/1_1.png", { opacity: 0.75 });
+    const coverageLayer = L.tileLayer("https://tilecache.rainviewer.com/v2/radar/nowcast/256/{z}/{x}/{y}/1/0_0.png", { opacity: 0.5 });
 
-    // Menu de Seleção de Visões e Camadas no Mapa (Canto superior direito)
     const baseMaps = {
         "🗺️ Mapa Padrão": streetMap,
-        "🌙 Modo Escuro": darkMap,
+        "🌙 Modo Voyager": darkMap,
         "🛰️ Satélite Real": satelliteMap
     };
 
     const overlayMaps = {
-        "🌡️ Mapa Térmico (Calor/Frio)": tempLayer,
-        "🌧️ Radar de Chuva / Temporal": precipLayer,
-        "💨 Campo de Ventos": windLayer,
-        "☁️ Nuvens / Cobertura": cloudsLayer,
-        "🌀 Camada de Pressão": pressureLayer
+        "🌧️ Radar de Chuva / Tempestades": rainRadarLayer,
+        "☁️ Cobertura Meteorológica": coverageLayer
     };
 
-    // Adiciona o seletor visual interativo no mapa
     L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
     let marker = L.marker([-22.7253, -47.6492]).addTo(map);
 
-    // Evento de clique no mapa para atualização dinâmica
+    // Clique no mapa força atualização dos cartões
     map.on("click", function(e) {
         let lat = e.latlng.lat;
         let lon = e.latlng.lng;
