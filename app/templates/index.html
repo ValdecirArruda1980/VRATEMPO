@@ -16,12 +16,18 @@
         .card .val { font-size: 1.8rem; font-weight: bold; color: #38bdf8; }
         .card .sub { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
         #chart-container { background: #1e293b; margin: 0 20px 20px 20px; padding: 15px; border-radius: 10px; border: 1px solid #334155; height: 200px; }
-        .map-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #1e293b; margin: 0 20px; border-radius: 10px 10px 0 0; border: 1px solid #334155; border-bottom: none; }
-        .layer-btn { background: #334155; color: #fff; border: 1px solid #475569; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; margin-left: 5px; }
-        .layer-btn.active { background: #0284c7; border-color: #38bdf8; }
-        #map { height: 650px !important; margin: 0 20px 20px 20px; border-radius: 0 0 10px 10px; border: 1px solid #334155; }
-        .search-box { position: relative; width: 300px; }
-        .search-box input { width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; }
+        
+        /* Container do Mapa */
+        .map-wrapper { margin: 0 20px 20px 20px; position: relative; }
+        .map-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #1e293b; border-radius: 10px 10px 0 0; border: 1px solid #334155; border-bottom: none; }
+        #map { height: 650px !important; border-radius: 0 0 10px 10px; border: 1px solid #334155; }
+        
+        /* Legenda de Severidade / Cores */
+        .legend-bar { display: flex; gap: 15px; font-size: 0.75rem; color: #cbd5e1; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        
+        .search-box input { width: 280px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; }
     </style>
 </head>
 <body>
@@ -66,44 +72,57 @@
     <canvas id="forecastChart"></canvas>
 </div>
 
-<div class="map-header">
-    <span style="font-size: 0.9rem; font-weight: bold; color: #94a3b8;">Monitor Global em Tempo Real</span>
-    <div>
-        <button class="layer-btn active" onclick="setLayer('base')">🗺️ Mapa Base</button>
-        <button class="layer-btn" onclick="setLayer('clouds')">☁️ Satélite IR (Nuvens)</button>
-        <button class="layer-btn" onclick="setLayer('precipitation')">🌧️ Radar Precipitação</button>
+<div class="map-wrapper">
+    <div class="map-header">
+        <span style="font-size: 0.9rem; font-weight: bold; color: #94a3b8;">Monitor Global em Tempo Real</span>
+        <div class="legend-bar">
+            <div class="legend-item"><span class="color-dot" style="background: #22c55e;"></span> Fraco / Estável</div>
+            <div class="legend-item"><span class="color-dot" style="background: #eab308;"></span> Moderado / Atenção</div>
+            <div class="legend-item"><span class="color-dot" style="background: #f97316;"></span> Forte / Temporal</div>
+            <div class="legend-item"><span class="color-dot" style="background: #ef4444;"></span> Extremo / Granizo / Tornado</div>
+        </div>
     </div>
+    <div id="map"></div>
 </div>
 
-<div id="map"></div>
-
 <script>
+    // Inicialização do Mapa
     let map = L.map("map").setView([-22.7253, -47.6492], 9);
-    
-    // Camadas de mapa
-    const baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
-    const cloudsLayer = L.tileLayer("https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=b1b15e88fa797225412429c1c50c122a1", { opacity: 0.7 });
-    const precipLayer = L.tileLayer("https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=b1b15e88fa797225412429c1c50c122a1", { opacity: 0.7 });
 
-    function setLayer(type) {
-        map.removeLayer(cloudsLayer);
-        map.removeLayer(precipLayer);
-        
-        document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.remove('active'));
-        
-        if (type === 'clouds') {
-            cloudsLayer.addTo(map);
-            event.target.classList.add('active');
-        } else if (type === 'precipitation') {
-            precipLayer.addTo(map);
-            event.target.classList.add('active');
-        } else {
-            event.target.classList.add('active');
-        }
-    }
+    // Camadas Base
+    const streetMap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+    const darkMap = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { attribution: "© CARTO" });
+    const satelliteMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "© Esri" });
+
+    // Overlay de Camadas Meteorológicas Coloridas (OpenWeatherMap Tiles Padrão)
+    const apiKey = "b1b15e88fa797225412429c1c50c122a1";
+    const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+    const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+    const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+    const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+    const pressureLayer = L.tileLayer(`https://tile.openweathermap.org/map/pressure_new/{z}/{x}/{y}.png?appid=${apiKey}`, { opacity: 0.6 });
+
+    // Menu de Seleção de Visões e Camadas no Mapa (Canto superior direito)
+    const baseMaps = {
+        "🗺️ Mapa Padrão": streetMap,
+        "🌙 Modo Escuro": darkMap,
+        "🛰️ Satélite Real": satelliteMap
+    };
+
+    const overlayMaps = {
+        "🌡️ Mapa Térmico (Calor/Frio)": tempLayer,
+        "🌧️ Radar de Chuva / Temporal": precipLayer,
+        "💨 Campo de Ventos": windLayer,
+        "☁️ Nuvens / Cobertura": cloudsLayer,
+        "🌀 Camada de Pressão": pressureLayer
+    };
+
+    // Adiciona o seletor visual interativo no mapa
+    L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
     let marker = L.marker([-22.7253, -47.6492]).addTo(map);
 
+    // Evento de clique no mapa para atualização dinâmica
     map.on("click", function(e) {
         let lat = e.latlng.lat;
         let lon = e.latlng.lng;
