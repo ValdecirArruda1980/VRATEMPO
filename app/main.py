@@ -32,39 +32,51 @@ async def get_weather(
     return {"status": "success", "data": WEATHER_CACHE[cache_key]["data"]}
 
   async with httpx.AsyncClient(timeout=10.0) as client:
-    weather_url = (
-        f"https://api.open-meteo.com/v1/forecast?"
-        f"latitude={lat}&longitude={lon}"
-        f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cape"
-        f"&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,surface_pressure,wind_gusts_10m,cape"
-        f"&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max"
-        f"&timezone=auto"
-    )
-    response = await client.get(weather_url)
+    # 1. Tenta Open-Meteo Padrão
+    try:
+      weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,surface_pressure,wind_speed_10m&hourly=temperature_2m&timezone=auto"
+      response = await client.get(weather_url)
 
-    if response.status_code != 200:
-      fallback_url = (
-          f"https://api.open-meteo.com/v1/forecast?"
-          f"latitude={lat}&longitude={lon}"
-          f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,surface_pressure,wind_speed_10m"
-          f"&hourly=temperature_2m,precipitation_probability,surface_pressure"
-          f"&timezone=auto"
+      if response.status_code == 200:
+        data = response.json()
+        WEATHER_CACHE[cache_key] = {"timestamp": now, "data": data}
+        return {"status": "success", "data": data}
+    except Exception as e:
+      print(f"Erro Open-Meteo: {e}")
+
+    # 2. Fallback de emergência (wttr.in JSON) se a Open-Meteo bloquear o IP por 429
+    try:
+      fallback_url = f"https://wttr.in/{lat},{lon}?format=j1"
+      resp = await client.get(
+          fallback_url, headers={"User-Agent": "Mozilla/5.0"}
       )
-      response = await client.get(fallback_url)
+      if resp.status_code == 200:
+        wttr_data = resp.json()
+        curr = wttr_data["current_condition"][0]
 
-    if response.status_code == 200:
-      data = response.json()
-      WEATHER_CACHE[cache_key] = {"timestamp": now, "data": data}
-      return {"status": "success", "data": data}
+        # Adapta o formato wttr.in para a estrutura esperada pelo frontend
+        data = {
+            "current": {
+                "temperature_2m": float(curr.get("temp_C", 0)),
+                "wind_speed_10m": float(curr.get("windspeedKmph", 0)),
+                "precipitation": float(curr.get("precipMM", 0)),
+                "surface_pressure": float(curr.get("pressure", 0)),
+                "cape": 0,
+            },
+            "hourly": {
+                "time": [f"T{i:02d}:00" for i in range(24)],
+                "temperature_2m": [float(curr.get("temp_C", 0))] * 24,
+            },
+        }
+        WEATHER_CACHE[cache_key] = {"timestamp": now, "data": data}
+        return {"status": "success", "data": data}
+    except Exception as e:
+      print(f"Erro Fallback wttr.in: {e}")
 
-    if cache_key in WEATHER_CACHE:
-      return {"status": "success", "data": WEATHER_CACHE[cache_key]["data"]}
-
-    return {
-        "status": "error",
-        "code": response.status_code,
-        "detail": "Erro ao consultar provedor meteorológico.",
-    }
+  return {
+      "status": "error",
+      "detail": "Não foi possível obter os dados no momento.",
+  }
 
 
 @app.get("/api/search")
