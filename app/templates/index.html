@@ -15,10 +15,11 @@
         .card h4 { margin: 0 0 10px 0; color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
         .card .val { font-size: 1.8rem; font-weight: bold; color: #38bdf8; }
         .card .sub { font-size: 0.75rem; color: #64748b; margin-top: 5px; }
-        #map { height: 400px; margin: 0 20px 20px 20px; border-radius: 10px; border: 1px solid #334155; }
+        #chart-container { background: #1e293b; margin: 0 20px 20px 20px; padding: 15px; border-radius: 10px; border: 1px solid #334155; height: 200px; }
+        /* Mapa expandido para ocupar área maior da tela */
+        #map { height: 650px; margin: 0 20px 20px 20px; border-radius: 10px; border: 1px solid #334155; z-index: 1; }
         .search-box { position: relative; width: 300px; }
         .search-box input { width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #fff; }
-        #chart-container { background: #1e293b; margin: 0 20px 20px 20px; padding: 15px; border-radius: 10px; border: 1px solid #334155; height: 250px; }
     </style>
 </head>
 <body>
@@ -73,7 +74,6 @@
 
     let marker = L.marker([-22.7253, -47.6492]).addTo(map);
 
-    // Clique no mapa atualiza a previsão do ponto clicado
     map.on("click", function(e) {
         let lat = e.latlng.lat;
         let lon = e.latlng.lng;
